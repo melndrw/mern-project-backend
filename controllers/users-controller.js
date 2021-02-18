@@ -1,4 +1,5 @@
 const HttpError = require('../models/http-error');
+const { validationResult } = require('express-validator');
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -29,6 +30,16 @@ const getAllUsers = (req, res, next) => {
 };
 
 const register = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const validator = errors.errors.map((error) => {
+      return {
+        field: error.param,
+        message: error.msg,
+      };
+    });
+    return res.status(422).json(validator);
+  }
   const { name, email, password } = req.body;
   const newUser = {
     id: uuidv4(),
@@ -47,6 +58,16 @@ const register = (req, res, next) => {
 };
 
 const login = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const validator = errors.errors.map((error) => {
+      return {
+        field: error.param,
+        message: error.msg,
+      };
+    });
+    return res.status(422).json(validator);
+  }
   const { email, password } = req.body;
   const getUser = DUMMY_USERS.find(
     (user) => user.email === email && user.password === password
