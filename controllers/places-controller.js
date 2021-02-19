@@ -1,56 +1,59 @@
+require('dotenv').config();
 const HttpError = require('../models/http-error');
-const { v4: uuidv4 } = require('uuid');
 const { validationResult } = require('express-validator');
 const getCoordsForAddress = require('../utils/location');
+const mongoose = require('mongoose');
+const Place = require('../models/place-schema');
 
-let DUMMY = [
-  {
-    id: 1,
-    title: 'Jose Rizal Monument',
-    description: 'The National Hero of the Philippines',
-    image:
-      'https://media-cdn.tripadvisor.com/media/photo-m/1280/1a/dd/05/24/frontal-del-monumento.jpg',
-    address: 'Rizal Monument, Burgos Street, Calamba, Laguna',
-    coordinates: {
-      lat: 14.2126296,
-      lng: 121.1652271,
-    },
-    creator: 2,
-  },
-  {
-    id: 2,
-    title: 'Andres Bonifacio Monument',
-    description: 'The Father of Philippine Revolutionary',
-    image:
-      'https://thumbs.dreamstime.com/b/manila-ph-oct-andres-bonifacio-shrine-october-philippines-shows-life-story-philippine-hero-his-childhood-to-181008649.jpg',
-    address: 'Liwasang Bonifacio, Ermita, Maynila',
-    coordinates: {
-      lat: 14.5945523,
-      lng: 120.979409,
-    },
-    creator: 1,
-  },
-];
+const MONGODB_PASS = process.env.MONGODB_PASS;
 
-const getPlaceById = (req, res, next) => {
-  const placeId = req.params.pid;
-  const place = DUMMY.find((item) => item.id == placeId);
+const url = `mongodb+srv://userTest:${MONGODB_PASS}@cluster0.scnp1.mongodb.net/yourplace_test?retryWrites=true&w=majority`;
 
-  if (!place) {
-    throw new HttpError('Could not find a place for a provided place ID', 404);
+mongoose
+  .connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => {
+    console.log('Connected to database at port 5000');
+  })
+  .catch(() => {
+    console.log('Connection Failed');
+  });
+
+const getAllPlaces = async (req, res, next) => {
+  const places = await Place.find().exec();
+  if (!places || places.length === 0) {
+    return next(new HttpError('Could not find places on database', 404));
   }
-  res.json({ place: place });
+  res.json(places);
 };
 
-const getPlacesByUserId = (req, res, next) => {
+const getPlaceById = async (req, res, next) => {
+  const placeId = req.params.pid;
+  const place = await Place.findById(placeId, (error, data) => {
+    if (error) {
+      return next(
+        new HttpError('Could not find a place for a provided ID', 404)
+      );
+    }
+    return data;
+  });
+
+  res.json(place);
+};
+
+const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
-  const places = DUMMY.filter((item) => item.creator == userId);
-  if (!places || places.length === 0) {
-    return next(
-      new HttpError('Could not find a place for a provided user ID', 404)
-    );
-  }
-  res.json({ 'user-place': places });
+  const places = await Place.find(
+    { creator: Number(userId) },
+    (error, data) => {
+      if (error) {
+        return next(
+          new HttpError('Could not find a place for a provided user ID', 404)
+        );
+      }
+      return data;
+    }
+  );
+  res.json(places);
 };
 
 const addPlace = async (req, res, next) => {
@@ -72,19 +75,25 @@ const addPlace = async (req, res, next) => {
     return next(error);
   }
 
-  const createdPlace = {
-    id: uuidv4(),
+  const createPlace = {
     title,
     description,
-    location: coordinates,
+    location: {
+      lat: coordinates.latitude,
+      lng: coordinates.longitude,
+    },
     address,
     creator,
   };
-  DUMMY.push(createdPlace);
-  res.status(201).json({ places: createdPlace });
+
+  const createdPlace = new Place(createPlace);
+
+  const result = await createdPlace.save();
+
+  res.status(201).json({ places: result, message: 'A place has been added!' });
 };
 
-const updatePlaceById = (req, res, next) => {
+const updatePlaceById = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const validator = errors.errors.map((error) => {
@@ -95,35 +104,37 @@ const updatePlaceById = (req, res, next) => {
     });
     return res.status(422).json(validator);
   }
-
   const { title, description } = req.body;
   const placeId = req.params.pid;
-  const updatedPlace = { ...DUMMY.find((item) => item.id == placeId) };
-  const placeIndex = DUMMY.findIndex((index) => index.id == placeId);
-  updatedPlace.title = title;
-  updatedPlace.description = description;
-
-  DUMMY[placeIndex] = updatedPlace;
-
-  res.status(201).json({ places: updatedPlace });
+  const placeUpdated = await Place.findByIdAndUpdate(
+    placeId,
+    {
+      title: title,
+      description: description,
+    },
+    (error, data) => {
+      if (error) {
+        return next(new HttpError('Failed to Update at Database'));
+      }
+      return data;
+    }
+  );
+  res.status(201).json(placeUpdated);
 };
 
-const deletePlace = (req, res, next) => {
+const deletePlace = async (req, res, next) => {
   const placeId = req.params.pid;
-  if (!DUMMY.find((item) => item.id == placeId)) {
-    throw new HttpError('Could not find a place for that id', 404);
-  }
-  DUMMY = DUMMY.filter((item) => item.id != placeId);
-
-  if (DUMMY.length === 0) {
-    return next(new HttpError('No Data found', 404));
-  }
+  await Place.findByIdAndDelete(placeId, (error) => {
+    if (error) {
+      return next(new HttpError('Could not find a place for that id', 404));
+    }
+  });
   res.status(201).json({
-    places: DUMMY,
     message: `The ID Number: ${placeId} has been deleted successfully`,
   });
 };
 
+exports.getAllPlaces = getAllPlaces;
 exports.getPlaceById = getPlaceById;
 exports.getPlacesByUserId = getPlacesByUserId;
 exports.addPlace = addPlace;
