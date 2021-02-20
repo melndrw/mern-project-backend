@@ -1,59 +1,59 @@
-require('dotenv').config();
-const HttpError = require('../models/http-error');
 const { validationResult } = require('express-validator');
-const getCoordsForAddress = require('../utils/location');
 const mongoose = require('mongoose');
+
+const HttpError = require('../models/http-error');
+const getCoordsForAddress = require('../utils/location');
 const Place = require('../models/place-schema');
-
-const MONGODB_PASS = process.env.MONGODB_PASS;
-
-const url = `mongodb+srv://userTest:${MONGODB_PASS}@cluster0.scnp1.mongodb.net/yourplace_test?retryWrites=true&w=majority`;
-
-mongoose
-  .connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => {
-    console.log('Connected to database at port 5000');
-  })
-  .catch(() => {
-    console.log('Connection Failed');
-  });
+const User = require('../models/user-schema');
 
 const getAllPlaces = async (req, res, next) => {
   const places = await Place.find().exec();
   if (!places || places.length === 0) {
     return next(new HttpError('Could not find places on database', 404));
   }
-  res.json(places);
+  res.json(places.map((item) => item.toObject({ getters: true })));
 };
 
 const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
-  const place = await Place.findById(placeId, (error, data) => {
-    if (error) {
-      return next(
-        new HttpError('Could not find a place for a provided ID', 404)
-      );
-    }
-    return data;
-  });
-
-  res.json(place);
+  let place;
+  try {
+    place = await Place.findById(placeId);
+  } catch (error) {
+    return next(
+      new HttpError(
+        'There is an error on fetching the data, please try again',
+        404
+      )
+    );
+  }
+  if (!place) {
+    return next(new HttpError('Could not find a place for a provided ID', 404));
+  }
+  res.json({ place: place.toObject({ getters: true }) });
 };
 
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
-  const places = await Place.find(
-    { creator: Number(userId) },
-    (error, data) => {
-      if (error) {
-        return next(
-          new HttpError('Could not find a place for a provided user ID', 404)
-        );
-      }
-      return data;
-    }
+  let userWithPlaces;
+  try {
+    userWithPlaces = await User.findById(userId).populate('places');
+  } catch (error) {
+    return next(
+      new HttpError(
+        'There is an error on fetching the data, please try again',
+        500
+      )
+    );
+  }
+  if (!userWithPlaces || userWithPlaces.length === 0) {
+    return next(
+      new HttpError('Could not find a place for a provided user ID', 404)
+    );
+  }
+  res.json(
+    userWithPlaces.places.map((item) => item.toObject({ getters: true }))
   );
-  res.json(places);
 };
 
 const addPlace = async (req, res, next) => {
@@ -75,7 +75,7 @@ const addPlace = async (req, res, next) => {
     return next(error);
   }
 
-  const createPlace = {
+  const createdPlace = new Place({
     title,
     description,
     location: {
@@ -84,13 +84,33 @@ const addPlace = async (req, res, next) => {
     },
     address,
     creator,
-  };
+    image: 'https://www.compareremit.com/uploads/Coron-Island-Phil.jpg',
+  });
 
-  const createdPlace = new Place(createPlace);
+  let user;
 
-  const result = await createdPlace.save();
+  try {
+    user = await User.findById(creator);
+  } catch (error) {
+    return next(new HttpError('We could not find user for provided ID', 500));
+  }
+  try {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    await createdPlace.save({ session: session });
+    user.places.push(createdPlace);
+    await user.save({ session: session });
+    await session.commitTransaction();
+  } catch (err) {
+    return next(
+      new HttpError('Error on adding place on database. Please try again'),
+      500
+    );
+  }
 
-  res.status(201).json({ places: result, message: 'A place has been added!' });
+  res
+    .status(201)
+    .json({ places: createdPlace, message: 'A place has been added!' });
 };
 
 const updatePlaceById = async (req, res, next) => {
@@ -106,29 +126,46 @@ const updatePlaceById = async (req, res, next) => {
   }
   const { title, description } = req.body;
   const placeId = req.params.pid;
-  const placeUpdated = await Place.findByIdAndUpdate(
-    placeId,
-    {
-      title: title,
-      description: description,
-    },
-    (error, data) => {
-      if (error) {
-        return next(new HttpError('Failed to Update at Database'));
-      }
-      return data;
-    }
-  );
-  res.status(201).json(placeUpdated);
+  let updatedPlace;
+  try {
+    updatedPlace = await Place.findOneAndUpdate(
+      placeId,
+      {
+        title: title,
+        description: description,
+      },
+      { new: true, useFindAndModify: false }
+    );
+  } catch (error) {
+    return next(new HttpError('Failed to Update at Database'), 500);
+  }
+
+  res.status(201).json(updatedPlace.toObject({ getters: true }));
 };
 
 const deletePlace = async (req, res, next) => {
   const placeId = req.params.pid;
-  await Place.findByIdAndDelete(placeId, (error) => {
-    if (error) {
-      return next(new HttpError('Could not find a place for that id', 404));
-    }
-  });
+  let place;
+  try {
+    place = await Place.findById(placeId).populate('creator');
+  } catch (error) {
+    return next(new HttpError('Something went wrong, please try again', 500));
+  }
+  if (!place) {
+    return next(new HttpError('Could not find a place for that id', 404));
+  }
+
+  try {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    await place.remove({ session: session });
+    place.creator.places.pull(place);
+    await place.creator.save({ session: session });
+    await session.commitTransaction();
+  } catch (error) {
+    return next(new HttpError('Something went wrong, please try again', 500));
+  }
+
   res.status(201).json({
     message: `The ID Number: ${placeId} has been deleted successfully`,
   });
