@@ -1,6 +1,7 @@
 const express = require('express');
 const placeController = require('../controllers/places-controller');
 const placeValidators = require('../validators/places-validators');
+const fileUpload = require('../middleware/fileUpload-middleware');
 
 const router = express.Router();
 
@@ -10,7 +11,12 @@ router.get('/:pid', placeController.getPlaceById);
 
 router.get('/user/:uid', placeController.getPlacesByUserId);
 
-router.post('/', placeValidators.addPlaceValidator, placeController.addPlace);
+router.post(
+  '/',
+  fileUpload.single('placeImage'),
+  placeValidators.addPlaceValidator,
+  placeController.addPlace
+);
 
 router.patch(
   '/:pid',

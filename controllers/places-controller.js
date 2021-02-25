@@ -75,6 +75,12 @@ const addPlace = async (req, res, next) => {
     return next(error);
   }
 
+  if (!coordinates) {
+    return next(
+      new HttpError('The address you entered is invalid. Please try again.')
+    );
+  }
+
   const createdPlace = new Place({
     title,
     description,
@@ -84,9 +90,8 @@ const addPlace = async (req, res, next) => {
     },
     address,
     creator,
-    image: 'https://www.compareremit.com/uploads/Coron-Island-Phil.jpg',
+    placeImage: req.file.path,
   });
-
   let user;
 
   try {
@@ -126,21 +131,25 @@ const updatePlaceById = async (req, res, next) => {
   }
   const { title, description } = req.body;
   const placeId = req.params.pid;
+  console.log(placeId);
   let updatedPlace;
   try {
-    updatedPlace = await Place.findOneAndUpdate(
+    updatedPlace = await Place.findByIdAndUpdate(
       placeId,
       {
         title: title,
         description: description,
       },
-      { new: true, useFindAndModify: false }
+      { new: true }
     );
   } catch (error) {
     return next(new HttpError('Failed to Update at Database'), 500);
   }
-
-  res.status(201).json(updatedPlace.toObject({ getters: true }));
+  console.log(updatedPlace);
+  res.status(201).json({
+    place: updatedPlace.toObject({ getters: true }),
+    message: 'Updated Successfully',
+  });
 };
 
 const deletePlace = async (req, res, next) => {

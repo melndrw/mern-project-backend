@@ -50,8 +50,7 @@ const register = async (req, res, next) => {
     name,
     email,
     password,
-    image:
-      'https://i1.wp.com/www.alphr.com/wp-content/uploads/2020/05/Zoom-How-to-Set-Profile-Picture.jpg?resize=1200%2C666&ssl=1',
+    image: req.file.path,
     places: [],
   };
 
@@ -65,7 +64,7 @@ const register = async (req, res, next) => {
   }
   res.status(201).json({
     user: user.toObject({ getters: true }),
-    message: 'You have regigistered successfully',
+    message: 'You have registered successfully',
   });
 };
 
@@ -94,7 +93,10 @@ const login = async (req, res, next) => {
     );
   }
 
-  res.status(201).json({ message: 'Login Successfully' });
+  res.status(201).json({
+    user: existinguisher.toObject({ getters: true }),
+    message: 'Login Successfully',
+  });
 };
 
 exports.getAllUsers = getAllUsers;
