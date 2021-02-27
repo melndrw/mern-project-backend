@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
@@ -11,9 +10,11 @@ const HttpError = require('./models/http-error');
 
 const app = express();
 
-const MONGODB_PASS = process.env.MONGODB_PASS;
+const MONGO_PASS = process.env.DB_MONGO_PASS;
+const USER_NAME = process.env.DB_NAME;
+const USER = process.env.DB_USER;
 
-const url = `mongodb+srv://userTest:${MONGODB_PASS}@cluster0.scnp1.mongodb.net/yourplace_test?retryWrites=true&w=majority`;
+const url = `mongodb+srv://${USER}:${MONGO_PASS}@cluster0.scnp1.mongodb.net/${USER_NAME}?retryWrites=true&w=majority`;
 
 app.use(bodyParser.json());
 

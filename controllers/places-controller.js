@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
+const fs = require('fs');
 
 const HttpError = require('../models/http-error');
 const getCoordsForAddress = require('../utils/location');
@@ -131,7 +132,6 @@ const updatePlaceById = async (req, res, next) => {
   }
   const { title, description } = req.body;
   const placeId = req.params.pid;
-  console.log(placeId);
   let updatedPlace;
   try {
     updatedPlace = await Place.findByIdAndUpdate(
@@ -145,7 +145,11 @@ const updatePlaceById = async (req, res, next) => {
   } catch (error) {
     return next(new HttpError('Failed to Update at Database'), 500);
   }
-  console.log(updatedPlace);
+
+  if (updatedPlace.creator.toString() !== req.userData.userId) {
+    return next(new HttpError('You are not allowed to update this place'), 401);
+  }
+
   res.status(201).json({
     place: updatedPlace.toObject({ getters: true }),
     message: 'Updated Successfully',
@@ -164,6 +168,12 @@ const deletePlace = async (req, res, next) => {
     return next(new HttpError('Could not find a place for that id', 404));
   }
 
+  const imagePath = place.placeImage;
+
+  if (place.creator.id.toString() !== req.userData.userId) {
+    return next(new HttpError('You are not allowed to delete this place'), 401);
+  }
+
   try {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -174,6 +184,10 @@ const deletePlace = async (req, res, next) => {
   } catch (error) {
     return next(new HttpError('Something went wrong, please try again', 500));
   }
+
+  fs.unlink(imagePath, (err) => {
+    console.log(err);
+  });
 
   res.status(201).json({
     message: `The ID Number: ${placeId} has been deleted successfully`,

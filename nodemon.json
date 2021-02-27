@@ -1,0 +1,9 @@
+{
+  "env": {
+    "DB_USER": "userTest",
+    "DB_NAME": "yourplace_test",
+    "DB_MONGO_PASS": "mB06nUMuGql2k6vq",
+    "DB_API_KEY": "7fcae912ff4e4e2caecaa6d6ac004ad3",
+    "DB_JWT_PRIVATE_KEY": "secretkeyforyourplaces_pleasedont_share"
+  }
+}

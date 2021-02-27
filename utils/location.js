@@ -1,9 +1,7 @@
-require('dotenv').config();
 const HttpError = require('../models/http-error');
 const NodeGeocoder = require('node-geocoder');
 
-const API_KEY = process.env.API_KEY;
-
+const API_KEY = process.env.DB_API_KEY;
 const option = {
   provider: 'opencage',
   apiKey: API_KEY,

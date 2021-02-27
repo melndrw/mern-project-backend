@@ -1,5 +1,7 @@
 const HttpError = require('../models/http-error');
 const { validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const User = require('../models/user-schema');
 
 const getAllUsers = async (req, res, next) => {
@@ -46,10 +48,17 @@ const register = async (req, res, next) => {
       )
     );
   }
+  let hashedPassword;
+  try {
+    hashedPassword = await bcrypt.hash(password, 12);
+  } catch (error) {
+    return next(new HttpError('Hashing Password fails, please try again', 500));
+  }
+
   const newUser = {
     name,
     email,
-    password,
+    password: hashedPassword,
     image: req.file.path,
     places: [],
   };
@@ -62,8 +71,20 @@ const register = async (req, res, next) => {
       new HttpError('Error on Adding data to Database, Please try again.', 500)
     );
   }
+
+  let token;
+  try {
+    token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.DB_JWT_PRIVATE_KEY,
+      { expiresIn: '1h' }
+    );
+  } catch (error) {
+    return next(new HttpError('JWT Error detected, please try again', 500));
+  }
+
   res.status(201).json({
-    user: user.toObject({ getters: true }),
+    user: { userId: user.id, email: user.email, token: token },
     message: 'You have registered successfully',
   });
 };
@@ -87,14 +108,42 @@ const login = async (req, res, next) => {
   } catch (error) {
     return next(new HttpError('Logging in failed, Please try again.'), 500);
   }
-  if (!existinguisher || existinguisher.password !== password) {
+  if (!existinguisher) {
     return next(
-      new HttpError('You enter a wrong credentials. Please try again.')
+      new HttpError('You enter a wrong credentials. Please try again.', 404)
     );
   }
 
+  let isValidPassword = false;
+  try {
+    isValidPassword = await bcrypt.compare(password, existinguisher.password);
+  } catch (error) {
+    return next(
+      new HttpError(
+        'Could not logged in, please see your credentials and try again'
+      )
+    );
+  }
+
+  if (!isValidPassword) {
+    return next(
+      new HttpError('You enter a wrong credentials. Please try again.', 404)
+    );
+  }
+
+  let token;
+  try {
+    token = jwt.sign(
+      { userId: existinguisher.id, email: existinguisher.email },
+      process.env.DB_JWT_PRIVATE_KEY,
+      { expiresIn: '1h' }
+    );
+  } catch (error) {
+    return next(new HttpError('JWT error detected,please try again', 500));
+  }
+
   res.status(201).json({
-    user: existinguisher.toObject({ getters: true }),
+    user: { userId: existinguisher.id, email: existinguisher.id, token: token },
     message: 'Login Successfully',
   });
 };
