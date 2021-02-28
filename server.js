@@ -44,7 +44,7 @@ app.use(() => {
 app.use((error, req, res, next) => {
   if (req.file) {
     fs.unlink(req.file.path, () => {
-      console.log(error);
+      console.log('error:', error);
     });
   }
   if (res.headerSent) {
