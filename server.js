@@ -42,9 +42,9 @@ app.use(() => {
 });
 
 app.use((error, req, res, next) => {
-  if (req.file) {
+  if (req.file && req.file.path) {
     fs.unlink(req.file.path, () => {
-      console.log('error:', error);
+      console.log(error, req.file.path);
     });
   }
   if (res.headerSent) {

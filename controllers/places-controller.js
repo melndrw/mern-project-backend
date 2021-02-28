@@ -81,7 +81,6 @@ const addPlace = async (req, res, next) => {
       new HttpError('The address you entered is invalid. Please try again.')
     );
   }
-  console.log(req.file.path);
   const createdPlace = new Place({
     title,
     description,
